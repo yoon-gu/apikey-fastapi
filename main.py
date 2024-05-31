@@ -14,6 +14,7 @@ app = FastAPI()
 
 items: List[str] = []
 access_count: Dict[str, int] = defaultdict(int)  # API 키별 접속량을 추적하는 딕셔너리
+tokenizer_usage: Dict[str, int] = defaultdict(int)  # API 키별 토크나이저 사용량을 추적하는 딕셔너리
 
 # GPT-2 토크나이저 초기화
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
@@ -52,11 +53,17 @@ async def get_access_counts(api_key: APIKey = Depends(get_api_key)):
 @app.post("/encode", response_model=Dict[str, List[int]])
 async def encode_text(text: str = Body(..., embed=True), api_key: APIKey = Depends(get_api_key)):
     encoded_text = tokenizer.encode(text)
+    tokenizer_usage[api_key] += len(encoded_text)  # 토크나이저 사용량 증가
     return {"encoded_text": encoded_text}
+
+@app.get("/tokenizer-usage", response_model=Dict[str, int])
+async def get_tokenizer_usage(api_key: APIKey = Depends(get_api_key)):
+    return tokenizer_usage
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
 # curl http://localhost:8000/items
 # curl -X POST "http://localhost:8000/items" -H "access_token: your_secret_api_key1" -H "Content-Type: application/json" -d "{\"item\":\"NewItem\"}"
