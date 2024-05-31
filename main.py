@@ -5,10 +5,13 @@ from starlette.status import HTTP_403_FORBIDDEN
 from typing import List, Dict
 from collections import defaultdict
 from transformers import GPT2Tokenizer
+import json
+import os
 
 API_KEYS = {"your_secret_api_key1", "your_secret_api_key2", "your_secret_api_key3"}
 API_KEY_NAME = "access_token"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+USAGE_FILE = "usage_data.json"
 
 app = FastAPI()
 
@@ -18,6 +21,29 @@ tokenizer_usage: Dict[str, int] = defaultdict(int)  # API 키별 토크나이저
 
 # GPT-2 토크나이저 초기화
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+
+def load_usage_data():
+    if os.path.exists(USAGE_FILE):
+        with open(USAGE_FILE, "r") as f:
+            data = json.load(f)
+            global access_count, tokenizer_usage
+            access_count.update(data.get("access_count", {}))
+            tokenizer_usage.update(data.get("tokenizer_usage", {}))
+
+def save_usage_data():
+    with open(USAGE_FILE, "w") as f:
+        json.dump({
+            "access_count": dict(access_count),
+            "tokenizer_usage": dict(tokenizer_usage)
+        }, f, indent=4, ensure_ascii=False)
+
+@app.on_event("startup")
+async def on_startup():
+    load_usage_data()
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    save_usage_data()
 
 async def get_api_key(api_key_header: str = Depends(api_key_header)):
     if api_key_header in API_KEYS:
@@ -53,7 +79,8 @@ async def get_access_counts(api_key: APIKey = Depends(get_api_key)):
 @app.post("/encode", response_model=Dict[str, List[int]])
 async def encode_text(text: str = Body(..., embed=True), api_key: APIKey = Depends(get_api_key)):
     encoded_text = tokenizer.encode(text)
-    tokenizer_usage[api_key] += len(encoded_text)  # 토크나이저 사용량 증가
+    tokenizer_usage[api_key] += len(encoded_text)  # 토크나이저 사용량 증가 (토큰 수 기준)
+    save_usage_data()  # 사용량 데이터 저장
     return {"encoded_text": encoded_text}
 
 @app.get("/tokenizer-usage", response_model=Dict[str, int])
@@ -63,6 +90,7 @@ async def get_tokenizer_usage(api_key: APIKey = Depends(get_api_key)):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
 
 # curl http://localhost:8000/items
