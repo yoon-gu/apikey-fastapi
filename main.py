@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import FastAPI, Request, HTTPException, Depends, Body
 from fastapi.security.api_key import APIKeyHeader, APIKey
 from starlette.status import HTTP_403_FORBIDDEN
 from typing import List
@@ -24,7 +24,7 @@ async def read_items():
     return items
 
 @app.post("/items", response_model=List[str])
-async def add_item(item: str, api_key: APIKey = Depends(get_api_key)):
+async def add_item(item: str = Body(..., embed=True), api_key: APIKey = Depends(get_api_key)):
     items.append(item)
     return items
 
@@ -33,4 +33,4 @@ if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 # curl http://localhost:8000/items
-# curl -X POST -H "access_token: your_secret_api_key1" -d "item=NewItem" http://localhost:8000/items
+# curl -X POST "http://localhost:8000/items" -H "access_token: your_secret_api_key1" -H "Content-Type: application/json" -d "{\"item\":\"NewItem\"}"
