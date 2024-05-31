@@ -7,6 +7,7 @@ from collections import defaultdict
 from transformers import GPT2Tokenizer
 import json
 import os
+from contextlib import asynccontextmanager
 
 API_KEYS = {"your_secret_api_key1", "your_secret_api_key2", "your_secret_api_key3"}
 API_KEY_NAME = "access_token"
@@ -37,13 +38,13 @@ def save_usage_data():
             "tokenizer_usage": dict(tokenizer_usage)
         }, f, indent=4, ensure_ascii=False)
 
-@app.on_event("startup")
-async def on_startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     load_usage_data()
-
-@app.on_event("shutdown")
-async def on_shutdown():
+    yield
     save_usage_data()
+
+app = FastAPI(lifespan=lifespan)
 
 async def get_api_key(api_key_header: str = Depends(api_key_header)):
     if api_key_header in API_KEYS:
@@ -90,6 +91,7 @@ async def get_tokenizer_usage(api_key: APIKey = Depends(get_api_key)):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
 
 
